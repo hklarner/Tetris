@@ -1,5 +1,7 @@
 import pygame
 import random
+import random_agent
+reload(random_agent)
 
 
 class Match():
@@ -31,7 +33,11 @@ class Match():
         self.agent = agent
 
 class Agent():
-    pass
+    def set_state(self, blocks, piece):
+        pass
+
+    def get_actions(self):
+        return random.choice([['left'],['right'],['down']])
 
 class Human():
     def __init__(self):
@@ -297,12 +303,13 @@ class Matrix():
                 old_ghost = self.piece.Project(0,self.ghost_dy,0)
 
                 self.piece.x += dx
-                self.ghost_dy = 20-self.piece.y
+                self.ghost_dy = 0
                 new_ghost = self.piece.Project(0,self.ghost_dy,0)
-                while self.does_collide(new_ghost) or any([x<1 or x>10 or y>20 for x,y in new_ghost]):
-                    self.ghost_dy -=1
+                while not self.does_collide(new_ghost) and all([y<=20 for x,y in new_ghost]):
+                    self.ghost_dy +=1
                     new_ghost = self.piece.Project(0,self.ghost_dy,0)
-                
+                self.ghost_dy -=1
+                new_ghost = self.piece.Project(0,self.ghost_dy,0)
                 
                 self._draw(old_piece, new_piece, old_ghost, new_ghost)
                 
@@ -334,11 +341,14 @@ class Matrix():
                     new_piece = self.piece.Project(0,0,0)
                     break
             if new_piece:
-                self.ghost_dy = 20-self.piece.y
+                self.ghost_dy = 0
                 new_ghost = self.piece.Project(0,self.ghost_dy,0)
-                while self.does_collide(new_ghost) or any([y>20 for x,y in new_ghost]):
-                    self.ghost_dy -=1
+                while not self.does_collide(new_ghost) and all([y<=20 for x,y in new_ghost]):
+                    self.ghost_dy +=1
                     new_ghost = self.piece.Project(0,self.ghost_dy,0)
+                self.ghost_dy -=1
+                new_ghost = self.piece.Project(0,self.ghost_dy,0)
+                    
                 self._draw(old_piece, new_piece, old_ghost, new_ghost)
 
     def Drop(self):
@@ -351,8 +361,8 @@ class Matrix():
             
 
     def get_state(self):
-        blocks = set([])
-        piece = set([])
+        blocks = self.blocks.copy()
+        piece = self.piece.Project(0,0,0)
         return blocks, piece
 
 
@@ -365,7 +375,7 @@ def run():
     BaseY_Match1 = 100
     BaseX_Match2 = 530
     BaseY_Match2 = 100
-    key_repeat_delay = 50
+    
     color_background = (224,237,248)
     keys_human1 = {pygame.K_LEFT:'left',
                    pygame.K_RIGHT:'right',
@@ -381,7 +391,7 @@ def run():
     key_restart_match2 = pygame.K_2
 
     
-    clock = pygame.time.Clock()
+    
     pygame.display.set_caption('Tetirs AI Battle')
     screen = pygame.display.set_mode((width, height))
 
@@ -391,28 +401,36 @@ def run():
     
     pen2 = Pen(screen, BaseX_Match2, BaseY_Match2)
     human2 = Human()
-    match2 = Match(pen2, human2)
-    match2.matrix.game_over=True
+    agent = random_agent.Agent()
+    match2 = Match(pen2, agent)
+    match2.matrix.game_over=False
     
     
-    key_repeat1 = 0
-    key_repeat2 = 0
-    key_down1 = False
-    key_down2 = False
+    repeat1 = 0
+    repeat2 = 0
+    down1 = False
+    down2 = False
+    delay1 = 0
+    delay2 = 0
+    repeat_delay = 10
+    repeat_interval = 3
 
-    clock.tick(20)
+    clock = pygame.time.Clock()
     while True:
-
-        if key_down1:
-            if key_repeat1 < key_repeat_delay:
-                key_repeat1 +=1
+        clock.tick(50)
+        if down1:
+            if repeat1 < repeat_delay:
+                repeat1 +=1
             else:
-                human1.actions.append(key_down1)
-        if key_down2:
-            if key_repeat2 < key_repeat_delay:
-                key_repeat2 +=1
+                delay1 = (delay1+1)%repeat_interval
+                if delay1==0:
+                    human1.actions.append(down1)
+        if down2:
+            if repeat2 < repeat_delay:
+                repeat2 +=1
             else:
-                human1.actions.append(key_down1)
+                pass
+                #human2.actions.append(down2)
         
         for event in pygame.event.get():
 
@@ -424,14 +442,14 @@ def run():
             elif event.type == pygame.KEYDOWN:
                 key = event.key
                 if key in keys_human1:
-                    if not keys_human1[key]=='spin':
-                        key_down1 = keys_human1[key]
+                    if not keys_human1[key] in ['spin', 'drop']:
+                        down1 = keys_human1[key]
                     human1.actions.append(keys_human1[key])
                             
                             
                 elif key in keys_human1:
-                    if not keys_human2[key]=='spin':
-                        key_down2 = keys_human2[key]
+                    if not keys_human2[key] in ['spin', 'drop']:
+                        down2 = keys_human2[key]
                     human2.actions.append(keys_human2[key])
 
                 elif key == key_restart_match1:
@@ -441,9 +459,11 @@ def run():
 
             elif event.type == pygame.KEYUP:
                 if event.key in keys_human1:
-                    key_down1 = False
+                    down1 = False
+                    repeat1 = 0
                 elif event.key in keys_human2:
-                    key_down2 = False
+                    down2 = False
+                    repeat2 = 0
                     
 #-------------- Input Mouse -------------------------------------
             #elif event.type == pygame.MOUSE_CLICK
